@@ -332,11 +332,12 @@ popfile_ward <- popfile_ward %>%
 ######################################################################################################################
 #ward by ethnicity,  IMD quintile JA: with the right ethnicity code, and fisical years repeated
 pop_ward<- popfile_ward %>%
-  group_by(Electoral_wards_and_divisions_Code,Electoral_wards_and_divisions,  Ethnic_group_20_categories_Code,
+  group_by(Electoral_wards_and_divisions_Code,Electoral_wards_and_divisions, Ethnic_group_20_categories_Code,
            NHSCode, NHSCodeDefinition,ONSGroup, quantile ,Age_B_18_categories_Code,Age_B_18_categories) %>%
   summarise(Denominator = sum(Observation, na.rm = TRUE))  %>%
   cross_join(periods) %>% 
-  mutate(DataQualityID=1)
+  mutate(DataQualityID=1) %>% 
+  filter(!is.na(ONSGroup))  ###JA add this to remove NA ethnicity codes (it is NA in both population and numerator-Ethnic_group_20=15)
 
 s<-pop_ward[is.na(pop_ward$ONSGroup),]
 
@@ -392,6 +393,26 @@ indicator_rate_BSol <- pop_ward %>%
           multiplier = 100000) %>%
   rename("IndicatorValue" = value)
 
+##JA: to flag the denominator=0 after the grouping but without the age split, we produce a new table (grouped without age grouping)
+#with the correct flag
+s_BSol <- pop_ward %>%
+  left_join(indicator, by = c("Electoral_wards_and_divisions_Code" = "WD22CD",
+                              "NHSCode" = "EthnicCategoryCode",
+                              "Fiscal_Year" = "Fiscal_Year",
+                              "Age_B_18_categories_Code" ="AgeGroup_5_Code"
+  )) %>%
+  #  filter((LAD22CD == 'E08000025' | LAD22CD == 'E08000029') ) %>% #JA:removed
+  group_by(Fiscal_Year,DataQualityID) %>% #,Age_B_18_categories_Code,Age_B_18_categories,DataQualityID) %>% ##, NHSCode
+  summarise(Numerator = sum(Numerator, na.rm = TRUE),
+            Denominator = sum(Denominator)) %>% 
+  mutate(DataQualityID = ifelse(Denominator==0,5,DataQualityID))
+
+
+
+#JA: add the DataQualityID from the new table after joining with the rate table
+indicator_rate_BSol<-indicator_rate_BSol %>%  left_join(s_BSol, by = c( "Fiscal_Year" = "Fiscal_Year")) %>% 
+  select(-"total_count",-"total_pop")
+#  select (-"Numerator",-"Denominator")
 
 
 
@@ -433,8 +454,8 @@ indicator_rate_BSol_by_ethnicity <- pop_ward %>%
           stdpoptype = "field",
           type = "standard",
           multiplier = 100000) %>%
-  rename("IndicatorValue" = value) %>% 
-  filter(!is.na(Ethnicity))
+  rename("IndicatorValue" = value)  
+ # filter(!is.na(Ethnicity))
 
 
 ##JA: to flag the denominator=0 after the grouping but without the age split, we produce a new table (grouped without age grouping)
@@ -457,7 +478,8 @@ s_BSol_by_ethnicity <- pop_ward %>%
 indicator_rate_BSol_by_ethnicity<-indicator_rate_BSol_by_ethnicity %>%  left_join(s_BSol_by_ethnicity, by = c("Ethnicity" = "ONSGroup",
                                                                                        
                                                                                        "Fiscal_Year" = "Fiscal_Year")) %>% 
-                                select (-"Numerator",-"Denominator")
+                                select(-"total_count",-"total_pop")
+                              #  select (-"Numerator",-"Denominator")
 
 
 
@@ -490,8 +512,8 @@ group_by(AggType,AggID, Gender, IMD, Ethnicity, Fiscal_Year) %>%
           stdpoptype = "field",
           type = "standard",
           multiplier = 100000) %>%
-  rename("IndicatorValue" = value)%>% 
-  filter(!is.na(IMD))
+  rename("IndicatorValue" = value) 
+ # filter(!is.na(IMD))
 
 
 ##JA: to flag the denominator=0 after the grouping but without the age split, we produce a new table (grouped without age grouping)
@@ -553,8 +575,8 @@ indicator_rate_BSol_by_ethnicityXIMD <- pop_ward %>%
           stdpoptype = "field",
           type = "standard",
           multiplier = 100000) %>%
-  rename("IndicatorValue" = value)%>% 
-  filter(!is.na(Ethnicity))
+  rename("IndicatorValue" = value)
+ # filter(!is.na(Ethnicity))
 
 
 
@@ -567,8 +589,8 @@ s_BSol_by_ethnicityXIMD <- pop_ward %>%
   #filter((LAD22CD == 'E08000025' | LAD22CD == 'E08000029') ) %>%  #JA:remove
   group_by(quantile, ONSGroup, Fiscal_Year,DataQualityID) %>%
   summarise(Numerator = sum(Numerator, na.rm = TRUE),
-            Denominator = sum(Denominator))
-
+            Denominator = sum(Denominator)) %>% 
+mutate(DataQualityID = ifelse(Denominator==0,5,DataQualityID))
 
 
 #JA: add the DataQualityID from the new table after joining with the rate table
@@ -577,7 +599,8 @@ indicator_rate_BSol_by_ethnicityXIMD<-indicator_rate_BSol_by_ethnicityXIMD %>%
                                     left_join(s_BSol_by_ethnicityXIMD, by = c("q" = "quantile",
                                                                     "Ethnicity"="ONSGroup",
                                                             "Fiscal_Year" = "Fiscal_Year")) %>% 
-                                              select (-"Numerator",-"Denominator",-"q")
+                                              select(-"total_pop",-"total_count",-"q")
+                                              #select (-"Numerator",-"Denominator",-"q")
 
 
 
@@ -617,6 +640,32 @@ indicator_rate_LA <- pop_ward %>%
           multiplier = 100000) %>%
   rename("IndicatorValue" = value)
 
+##JA: to flag the denominator=0 after the grouping but without the age split, we produce a new table (grouped without age grouping)
+#with the correct flag
+s_LA <- pop_ward %>%
+  left_join(indicator, by = c("Electoral_wards_and_divisions_Code" = "WD22CD",
+                              "NHSCode" = "EthnicCategoryCode",
+                              "Fiscal_Year" = "Fiscal_Year",
+                              "Age_B_18_categories_Code" ="AgeGroup_5_Code"
+  )) %>% left_join(lsoa_LAD, by=c("Electoral_wards_and_divisions_Code"="WD22CD")) %>%  ##JA:added
+  #  filter((LAD22CD == 'E08000025' | LAD22CD == 'E08000029') ) %>% #JA:removed
+  group_by(Fiscal_Year,LAD22CD.y,DataQualityID) %>% #,Age_B_18_categories_Code,Age_B_18_categories,DataQualityID) %>% ##, NHSCode
+  summarise(Numerator = sum(Numerator, na.rm = TRUE),
+            Denominator = sum(Denominator)) %>% 
+  mutate(DataQualityID = ifelse(Denominator==0,5,DataQualityID))
+
+
+
+#JA: add the DataQualityID from the new table after joining with the rate table
+indicator_rate_LA<-indicator_rate_LA %>%  left_join(s_LA, by = c( "AggID"="LAD22CD.y",
+                                                                                                        
+                                                                    "Fiscal_Year" = "Fiscal_Year")) %>% 
+  select(-"total_count",-"total_pop")
+#  select (-"Numerator",-"Denominator")
+
+
+
+
 
 
 #rates for LA by ethnicity
@@ -648,8 +697,8 @@ indicator_rate_LA_by_ethnicity <- pop_ward %>%
           stdpoptype = "field",
           type = "standard",
           multiplier = 100000) %>%
-  rename("IndicatorValue" = value)%>% 
-  filter(!is.na(Ethnicity))
+  rename("IndicatorValue" = value) 
+ # filter(!is.na(Ethnicity))
 
 ##JA: to flag the denominator=0 after the grouping but without the age split, we produce a new table (grouped without age grouping)
 #with the correct flag
@@ -672,7 +721,8 @@ indicator_rate_LA_by_ethnicity<-indicator_rate_LA_by_ethnicity %>%  left_join(s_
                                                                                                         "AggID"="LAD22CD.y",
                                                                                                               
                                                                                                               "Fiscal_Year" = "Fiscal_Year")) %>% 
-  select (-"Numerator",-"Denominator")
+                                                                select(-"total_count",-"total_pop")
+                                                              #  select (-"Numerator",-"Denominator")
 
 
 
@@ -778,7 +828,8 @@ indicator_rate_LA_by_ethnicity<-indicator_rate_LA_by_ethnicity %>%  left_join(s_
     #filter((LAD22CD == 'E08000025' | LAD22CD == 'E08000029') ) %>%  #JA:remove
     group_by(quantile, ONSGroup,LAD22CD.y, Fiscal_Year,DataQualityID) %>%
     summarise(Numerator = sum(Numerator, na.rm = TRUE),
-              Denominator = sum(Denominator))
+              Denominator = sum(Denominator)) %>% 
+    mutate(DataQualityID = ifelse(Denominator==0,5,DataQualityID))
   
   
   
@@ -789,7 +840,9 @@ indicator_rate_LA_by_ethnicity<-indicator_rate_LA_by_ethnicity %>%  left_join(s_
                                               "Ethnicity"="ONSGroup",
                                             "AggID"="LAD22CD.y",
                                               "Fiscal_Year" = "Fiscal_Year")) %>% 
-    select (-"Numerator",-"Denominator",-"q")
+    select(-"total_count",-"total_pop",-"q")
+  #  select (-"Numerator",-"Denominator")
+  #  select (-"Numerator",-"Denominator",-"q")
   
   
 
@@ -829,7 +882,27 @@ indicator_rate_LA_by_ethnicity<-indicator_rate_LA_by_ethnicity %>%  left_join(s_
             multiplier = 100000) %>%
     rename("IndicatorValue" = value)
   
+  ##JA: to flag the denominator=0 after the grouping but without the age split, we produce a new table (grouped without age grouping)
+  #with the correct flag
+  s_Locality<- pop_ward %>%
+    left_join(indicator, by = c("Electoral_wards_and_divisions_Code" = "WD22CD",
+                                "NHSCode" = "EthnicCategoryCode",
+                                "Fiscal_Year" = "Fiscal_Year",
+                                "Age_B_18_categories_Code" ="AgeGroup_5_Code"
+    )) %>% left_join(localitiesWard, by=c("Electoral_wards_and_divisions_Code"="WD22CD")) %>%  ##JA:added
+    #  filter((LAD22CD == 'E08000025' | LAD22CD == 'E08000029') ) %>% #JA:removed
+    group_by(Fiscal_Year,Locality.y,DataQualityID) %>% #,Age_B_18_categories_Code,Age_B_18_categories,DataQualityID) %>% ##, NHSCode
+    summarise(Numerator = sum(Numerator, na.rm = TRUE),
+              Denominator = sum(Denominator)) %>% 
+    mutate(DataQualityID = ifelse(Denominator==0,5,DataQualityID))
   
+  
+  
+  #JA: add the DataQualityID from the new table after joining with the rate table
+  indicator_rate_Locality<-indicator_rate_Locality %>%  left_join(s_Locality, by = c("AggID"="Locality.y",
+                                                                                     "Fiscal_Year" = "Fiscal_Year")) %>% 
+    select(-"total_count",-"total_pop")
+  # select (-"Numerator",-"Denominator")
   
   
   
@@ -863,8 +936,8 @@ indicator_rate_Locality_by_ethnicity <- pop_ward %>%
           stdpoptype = "field",
           type = "standard",
           multiplier = 100000) %>%
-  rename("IndicatorValue" = value)%>% 
-  filter(!is.na(Ethnicity))
+  rename("IndicatorValue" = value)
+  #filter(!is.na(Ethnicity))
 
 
 ##JA: to flag the denominator=0 after the grouping but without the age split, we produce a new table (grouped without age grouping)
@@ -888,7 +961,8 @@ indicator_rate_Locality_by_ethnicity<-indicator_rate_Locality_by_ethnicity %>%  
                                                                                                         "AggID"="Locality.y",
                                                                                                         
                                                                                                         "Fiscal_Year" = "Fiscal_Year")) %>% 
-  select (-"Numerator",-"Denominator")
+  select(-"total_count",-"total_pop")
+ # select (-"Numerator",-"Denominator")
 
 
 
@@ -935,8 +1009,8 @@ indicator_rate_Locality_by_ethnicity<-indicator_rate_Locality_by_ethnicity %>%  
     #filter((LAD22CD == 'E08000025' | LAD22CD == 'E08000029') ) %>%  #JA:remove
     group_by(quantile, Locality.y, Fiscal_Year,DataQualityID) %>%
     summarise(Numerator = sum(Numerator, na.rm = TRUE),
-              Denominator = sum(Denominator))
-  
+              Denominator = sum(Denominator)) %>% 
+  mutate(DataQualityID = ifelse(Denominator==0,5,DataQualityID))
   
   
   #JA: add the DataQualityID from the new table after joining with the rate table
@@ -945,7 +1019,8 @@ indicator_rate_Locality_by_ethnicity<-indicator_rate_Locality_by_ethnicity %>%  
     left_join(s_Locality_by_IMD, by = c("q" = "quantile",
                                             "AggID"="Locality.y",
                                             "Fiscal_Year" = "Fiscal_Year")) %>% 
-    select (-"Numerator",-"Denominator",-"q")
+    select(-"total_count",-"total_pop",-"q")
+    #select (-"Numerator",-"Denominator",-"q")
   
   
 
@@ -978,8 +1053,8 @@ indicator_rate_Locality_by_ethnicity<-indicator_rate_Locality_by_ethnicity %>%  
             stdpoptype = "field",
             type = "standard",
             multiplier = 100000) %>%
-    rename("IndicatorValue" = value)%>% 
-    filter(!is.na(Ethnicity))
+    rename("IndicatorValue" = value)
+   # filter(!is.na(Ethnicity))
   
   s_Locality_by_ethnicityXIMD <- pop_ward %>%
     left_join(indicator, by= c("Electoral_wards_and_divisions_Code" = "WD22CD",
@@ -990,7 +1065,8 @@ indicator_rate_Locality_by_ethnicity<-indicator_rate_Locality_by_ethnicity %>%  
     #filter((LAD22CD == 'E08000025' | LAD22CD == 'E08000029') ) %>%  #JA:remove
     group_by(quantile, ONSGroup,Locality.y, Fiscal_Year,DataQualityID) %>%
     summarise(Numerator = sum(Numerator, na.rm = TRUE),
-              Denominator = sum(Denominator))
+              Denominator = sum(Denominator)) %>% 
+    mutate(DataQualityID = ifelse(Denominator==0,5,DataQualityID))
   
   
   
@@ -1001,7 +1077,8 @@ indicator_rate_Locality_by_ethnicity<-indicator_rate_Locality_by_ethnicity %>%  
                                             "Ethnicity"="ONSGroup",
                                             "AggID"="Locality.y",
                                             "Fiscal_Year" = "Fiscal_Year")) %>% 
-    select (-"Numerator",-"Denominator",-"q")
+    select(-"total_count",-"total_pop",-"q")
+   #  select (-"Numerator",-"Denominator",-"q")
   
 
 
@@ -1059,7 +1136,8 @@ indicator_rate_ward <- pop_ward %>%
   #JA: add the DataQualityID from the new table after joining with the rate table
   indicator_rate_ward<-indicator_rate_ward %>%  left_join(s_Ward, by = c( "AggID"="WD22NM.y",
                                                                          "Fiscal_Year" = "Fiscal_Year")) %>% 
-    select (-"Numerator",-"Denominator")
+    select(-"total_count",-"total_pop")
+   # select (-"Numerator",-"Denominator")
   
 
   
@@ -1094,8 +1172,8 @@ indicator_rate_ward <- pop_ward %>%
             stdpoptype = "field",
             type = "standard",
             multiplier = 100000) %>%
-    rename("IndicatorValue" = value)%>% 
-    filter(!is.na(Ethnicity))
+    rename("IndicatorValue" = value) 
+   # filter(!is.na(Ethnicity))
   
   ##JA: to flag the denominator=0 after the grouping but without the age split, we produce a new table (grouped without age grouping)
   #with the correct flag
@@ -1118,7 +1196,8 @@ indicator_rate_ward <- pop_ward %>%
                                                                                                                 "AggID"="WD22NM.y",
                                                                                                                 
                                                                                                                 "Fiscal_Year" = "Fiscal_Year")) %>% 
-    select (-"Numerator",-"Denominator")
+    select(-"total_count",-"total_pop")
+   # select (-"Numerator",-"Denominator")
   
   
   
@@ -1163,7 +1242,8 @@ indicator_rate_ward <- pop_ward %>%
     #filter((LAD22CD == 'E08000025' | LAD22CD == 'E08000029') ) %>%  #JA:remove
     group_by(quantile, WD22NM.y, Fiscal_Year,DataQualityID) %>%
     summarise(Numerator = sum(Numerator, na.rm = TRUE),
-              Denominator = sum(Denominator))
+              Denominator = sum(Denominator)) %>% 
+    mutate(DataQualityID = ifelse(Denominator==0,5,DataQualityID))
   
   
   
@@ -1172,8 +1252,9 @@ indicator_rate_ward <- pop_ward %>%
     mutate(q=as.numeric(gsub('Q', '', IMD))) %>%
     left_join(s_Ward_by_IMD, by = c("q" = "quantile",
                                         "AggID"="WD22NM.y",
-                                        "Fiscal_Year" = "Fiscal_Year")) %>% 
-    select (-"Numerator",-"Denominator",-"q")
+                                        "Fiscal_Year" = "Fiscal_Year")) %>% #
+    select(-"total_count",-"total_pop",-"q")
+   # select (-"Numerator",-"Denominator",-"q")
   
   
   
@@ -1206,8 +1287,8 @@ indicator_rate_ward <- pop_ward %>%
             stdpoptype = "field",
             type = "standard",
             multiplier = 100000) %>%
-    rename("IndicatorValue" = value)%>% 
-    filter(!is.na(Ethnicity))
+    rename("IndicatorValue" = value)
+   # filter(!is.na(Ethnicity))
   
   s_Ward_by_ethnicityXIMD <- pop_ward %>%
     left_join(indicator, by= c("Electoral_wards_and_divisions_Code" = "WD22CD",
@@ -1218,7 +1299,8 @@ indicator_rate_ward <- pop_ward %>%
     #filter((LAD22CD == 'E08000025' | LAD22CD == 'E08000029') ) %>%  #JA:remove
     group_by(quantile, ONSGroup,WD22NM.y, Fiscal_Year,DataQualityID) %>%
     summarise(Numerator = sum(Numerator, na.rm = TRUE),
-              Denominator = sum(Denominator))
+              Denominator = sum(Denominator)) %>% 
+    mutate(DataQualityID = ifelse(Denominator==0,5,DataQualityID))
   
   
   
@@ -1229,7 +1311,9 @@ indicator_rate_ward <- pop_ward %>%
                                                   "Ethnicity"="ONSGroup",
                                                   "AggID"="WD22NM.y",
                                                   "Fiscal_Year" = "Fiscal_Year")) %>% 
-    select (-"Numerator",-"Denominator",-"q")
+    
+    select(-"total_count",-"total_pop",-"q")
+    #select (-"Numerator",-"Denominator",-"q")
   
   
   
@@ -1360,8 +1444,8 @@ indicator_all_output <-cbind(IndicatorID=IndicatorID,
     IndicatorValue="float",
     lowercl="float",
     uppercl="float",
-    total_count="float",
-    total_pop="float",
+   Numerator="float", #total_count="float",
+   Denominator="float",# total_pop="float",
    #  Numerator="float",
     #Denominator="float",
     StatusID="smallint",
