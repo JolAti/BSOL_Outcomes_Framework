@@ -107,10 +107,16 @@ con2<-dbConnect(odbc::odbc(), .connection_string = "Driver={SQL Server};server=M
 # ")
 
 
+#IndicatorID	ReferenceID
+#49	93229
+
+#50	93231
+
 IndicatorID=49
 ReferenceID=93229
 
 IndicatorID=50
+
 
 query <- paste0("
 select IndicatorID, ReferenceID
@@ -120,7 +126,7 @@ select IndicatorID, ReferenceID
 ,Financial_Year
 ,sum(Numerator) as Numerator
 from [EAT_Reporting_BSOL].[OF].IndicatorData
-where indicatorID=49
+where indicatorID=50
 Group by IndicatorID
 ,ReferenceID
 ,Ethnicity_Code,LSOA_2021,
@@ -268,7 +274,7 @@ ethnic_codes <- ethnic_codes %>%
 #popfile_ward <- read.csv("C21_a86_e20_ward.csv", header = TRUE, check.names = FALSE)
 popfile_ward <- read.csv("c21_a18_e20_s2_ward.csv", header = TRUE, check.names = FALSE)  ###########JA
 
-g<-popfile_ward %>% select(`Ethnic group (20 categories) Code`,`Ethnic group (20 categories)`) %>% unique
+#g<-popfile_ward %>% select(`Ethnic group (20 categories) Code`,`Ethnic group (20 categories)`) %>% unique
 
 
 #try<-read.csv("c21_a11_e20_s2_ward.csv", header = TRUE, check.names = FALSE)
@@ -339,7 +345,7 @@ pop_ward<- popfile_ward %>%
   mutate(DataQualityID=1) %>% 
   filter(!is.na(ONSGroup))  ###JA add this to remove NA ethnicity codes (it is NA in both population and numerator-Ethnic_group_20=15)
 
-s<-pop_ward[is.na(pop_ward$ONSGroup),]
+#s<-pop_ward[is.na(pop_ward$ONSGroup),]
 
 
 ######################################################################################################################
@@ -370,7 +376,7 @@ indicator_rate_BSol <- pop_ward %>%
                               
   )) %>%
   #filter((LAD22CD == 'E08000025' | LAD22CD == 'E08000029') ) %>% JA: removed this because it removes the 0 values in the numerator and filtered denominator instead
-  group_by(Fiscal_Year,Age_B_18_categories_Code,Age_B_18_categories,DataQualityID) %>%
+  group_by(Fiscal_Year,Age_B_18_categories_Code,Age_B_18_categories) %>%
   summarise(Numerator = sum(Numerator, na.rm = TRUE),
             Denominator = sum(Denominator)) %>%
   mutate(Gender = Demo_Gender,
@@ -383,7 +389,7 @@ indicator_rate_BSol <- pop_ward %>%
   group_by(AggType,AggID,
            Gender,  IMD, Ethnicity,
            Fiscal_Year
-           ,DataQualityID)   %>%
+           )   %>%
   left_join(Std_pop, by=c("Age_B_18_categories_Code"="AgeBand_Code")) %>% #JA: Added
   phe_dsr(x=Numerator,
           n=Denominator,
@@ -537,8 +543,8 @@ indicator_rate_BSol_by_IMD<-indicator_rate_BSol_by_IMD %>%
                                 mutate(q=as.numeric(gsub('Q', '', IMD))) %>%
                                 left_join(s_BSol_by_IMD, by = c("q" = "quantile",
                                                   "Fiscal_Year" = "Fiscal_Year")) %>% 
-  select (-"Numerator",-"Denominator",-"q")
-
+  #select (-"Numerator",-"Denominator",-"q")
+  select(-"total_count",-"total_pop",-"q")
 
 
 
@@ -617,7 +623,7 @@ indicator_rate_LA <- pop_ward %>%
   )) %>% left_join(lsoa_LAD, by=c("Electoral_wards_and_divisions_Code"="WD22CD")) %>%  ##JA:added this because I need all values for all ages even when numerator does not exist for the standardisation to work
  #!!!!!!JA: might be better joining LAD and locality to pop_ward from the begnning
   #filter((LAD22CD == 'E08000025' | LAD22CD == 'E08000029') ) %>% #JA
-  group_by(LAD22CD.y, Fiscal_Year,Age_B_18_categories_Code,Age_B_18_categories,DataQualityID) %>% ##JA:took LAD22CD.y because it is the complete one
+  group_by(LAD22CD.y, Fiscal_Year,Age_B_18_categories_Code,Age_B_18_categories) %>% ##JA:took LAD22CD.y because it is the complete one
   summarise(Numerator = sum(Numerator, na.rm = TRUE),
             Denominator = sum(Denominator)) %>%
 
@@ -630,7 +636,7 @@ indicator_rate_LA <- pop_ward %>%
          AggID = LAD22CD.y,
          AggType='Local Authority'
   )  %>%
- group_by(AggType,AggID, Gender, IMD, Ethnicity,  Fiscal_Year,DataQualityID)   %>%
+ group_by(AggType,AggID, Gender, IMD, Ethnicity,  Fiscal_Year)   %>%
   left_join(Std_pop, by=c("Age_B_18_categories_Code"="AgeBand_Code")) %>% #JA: Added
   phe_dsr(x=Numerator,
           n=Denominator,
@@ -782,7 +788,8 @@ indicator_rate_LA_by_ethnicity<-indicator_rate_LA_by_ethnicity %>%  left_join(s_
     left_join(s_LA_by_IMD, by = c("q" = "quantile",
                                       "AggID"="LAD22CD.y",
                                        "Fiscal_Year" = "Fiscal_Year")) %>% 
-    select (-"Numerator",-"Denominator",-"q")
+    #select (-"Numerator",-"Denominator",-"q")
+    select(-"total_count",-"total_pop",-"q")
   
   
   
@@ -1411,24 +1418,30 @@ indicator_all_output <-cbind(IndicatorID=IndicatorID,
                    indicator_rate_LA,
                    indicator_rate_Locality,
                    indicator_rate_BSol,
+                   indicator_rate_ward,
                    indicator_rate_LA_by_ethnicity,
                    indicator_rate_Locality_by_ethnicity,
                    indicator_rate_BSol_by_ethnicity,
+                   indicator_rate_ward_by_ethnicity,
                    indicator_rate_LA_by_IMD,
                   indicator_rate_Locality_by_IMD,
                    indicator_rate_BSol_by_IMD,
-                   indicator_rate_BSol_by_ethnicityXIMD)) %>% 
+                  indicator_rate_ward_by_IMD,
+                   indicator_rate_BSol_by_ethnicityXIMD,
+                  indicator_rate_LA_by_ethnicityXIMD,
+                  indicator_rate_Locality_by_ethnicityXIMD,
+                  indicator_rate_ward_by_ethnicityXIMD)) %>% 
                  mutate( InsertDate = today(),
                   IndicatorStartDate = as.Date(ifelse(is.na(Fiscal_Year), NA, paste0(substring(Fiscal_Year, 1, 4), '-04-01'))),
                   IndicatorEndDate = as.Date(ifelse(is.na(Fiscal_Year), NA, paste0('20', substring(Fiscal_Year, 8, 9), '-03-31'))),
-                  StatusID = as.integer(1), # current
-                  DataQualityID = as.integer(1))
+                  StatusID = as.integer(1)) # current
+                  #DataQualityID = as.integer(1))
  
  #write.csv(indicator_all_output, "CVD_indicator93229_ONS.csv")
  
  dbWriteTable(
    con2,
-   Id(schema="dbo",table="BSOL_0033_OF_93231_Stroke_StandardisedRate"),
+   Id(schema="dbo",table="BSOL_0033_OF_93231_Stroke_StandardisedRate"), #"BSOL_0033_OF_93229_CHD_StandardisedRate"),
    indicator_all_output,
    overwrite=TRUE,
    field.types=c(
